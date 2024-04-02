@@ -1,57 +1,89 @@
-<script>
+<script lang="ts">
+	import Button from '../components/Button.svelte';
+	import PhaserGame from '../game/PhaserGame.svelte';
+
+	import type { MainMenu } from '../game/scenes/MainMenu.svelte';
+	import { getSpritePosition } from '../game/state/stateSpritePosition.svelte';
 	import Phaser from 'phaser';
 
-	class Example extends Phaser.Scene {
-		preload() {
-			this.load.setBaseURL('https://labs.phaser.io');
+	// The sprite can only be moved in the MainMenu Scene
+	let canMoveSprite: boolean | undefined = $state();
 
-			this.load.image('sky', 'assets/skies/space3.png');
-			this.load.image('logo', 'assets/sprites/phaser3-logo.png');
-			this.load.image('red', 'assets/particles/red.png');
-		}
+	//  References to the PhaserGame component (game and scene are exposed)
+	let phaserRef: MainMenu | undefined = $state();
 
-		create() {
-			this.add.image(400, 300, 'sky');
+	const spritePosition = getSpritePosition();
 
-			const particles = this.add.particles(0, 0, 'red', {
-				speed: 100,
-				scale: { start: 1, end: 0 },
-				blendMode: 'ADD'
-			});
-
-			const logo = this.physics.add.image(400, 100, 'logo');
-
-			logo.setVelocity(100, 200);
-			logo.setBounce(1, 1);
-			logo.setCollideWorldBounds(true);
-
-			particles.startFollow(logo);
-		}
+	function setRef(ref: Phaser.Scene) {
+		console.log('ref', ref);
+		console.log('phaserRef', phaserRef);
+		phaserRef = ref.scene as unknown as MainMenu;
 	}
 
-	const config = {
-		type: Phaser.AUTO,
-		width: 800,
-		height: 600,
-		scene: Example,
-		physics: {
-			default: 'arcade',
-			arcade: {
-				gravity: { y: 1200, x: 0 }
-			}
+	const changeScene = () => {
+		const scene = phaserRef!.scene as unknown as MainMenu;
+
+		if (scene) {
+			//  Call the changeScene method defined in the `MainMenu`, `Game` and `GameOver` Scenes
+			scene.changeScene();
 		}
 	};
 
-	const game = new Phaser.Game(config);
+	const moveSprite = () => {
+		const scene = phaserRef!.scene as unknown as MainMenu;
+
+		if (scene) {
+			//  Call the `moveLogo` method in the `MainMenu` Scene and capture the sprite position
+
+			scene.moveLogo(({ x, y }: { x: number; y: number }) => {
+				spritePosition.set({ x, y });
+			});
+		}
+	};
+
+	const addSprite = () => {
+		const scene = phaserRef!.scene as unknown as MainMenu;
+
+		if (scene) {
+			//  Add a new sprite to the current scene at a random position
+			const x = Phaser.Math.Between(64, scene.scale.width - 64);
+			const y = Phaser.Math.Between(64, scene.scale.height - 64);
+
+			//  `add.sprite` is a Phaser GameObjectFactory method and it returns a Sprite Game Object instance
+			const star = scene.add.sprite(x, y, 'star');
+
+			//  ... which you can then act upon. Here we create a Phaser Tween to fade the star sprite in and out.
+			//  You could, of course, do this from within the Phaser Scene code, but this is just an example
+			//  showing that Phaser objects and systems can be acted upon from outside of Phaser itself.
+			scene.add.tween({
+				targets: star,
+				duration: 500 + Math.random() * 1000,
+				alpha: 0,
+				yoyo: true,
+				repeat: -1
+			});
+		}
+	};
+
+	//  This event is emitted from the PhaserGame component:
+	const passCurrentScene = (scene: Phaser.Scene) => {
+		canMoveSprite = scene.scene.key !== 'MainMenu';
+	};
 </script>
 
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to read the documentation</p>
-
-<style>
-	:global(canvas) {
-		background-color: hotpink;
-		padding: 1rem;
-		border-radius: 3%;
-	}
-</style>
+<PhaserGame {setRef} {passCurrentScene} />
+<div class="p-2">
+	<div>
+		<Button onclick={changeScene}>Change Scene</Button>
+	</div>
+	<div>
+		<Button disabled={canMoveSprite} onclick={moveSprite}>Toggle Movement</Button>
+	</div>
+	<div class="absolute bottom-0">
+		Sprite Position:
+		<pre>{JSON.stringify(spritePosition)}</pre>
+	</div>
+	<div>
+		<Button onclick={addSprite}>Add New Sprite</Button>
+	</div>
+</div>
